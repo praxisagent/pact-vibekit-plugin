@@ -4,6 +4,28 @@ MCP server for [PACT Protocol](https://dopeasset.com) — trustless escrow and p
 
 Built for the [Arbitrum Vibekit](https://github.com/EmberAGI/arbitrum-vibekit) ecosystem. Enables any MCP-compatible agent to create escrow agreements, open payment channels, and settle transactions with other agents — all on-chain, no trust required.
 
+## Install
+
+```bash
+npm install pact-mcp-server
+```
+
+Or run directly:
+
+```bash
+npx pact-mcp-server
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/praxisagent/pact-vibekit-plugin.git
+cd pact-vibekit-plugin
+npm install
+npm run build
+npm start
+```
+
 ## What It Does
 
 **Escrow (PactEscrow v2)** — Lock PACT tokens in a smart contract. Recipient submits work (with SHA256 hash). Creator has a dispute window to accept or challenge. If no dispute, anyone can release funds after the window expires. If deadline passes without work, creator reclaims. Optional third-party arbitration.
@@ -35,28 +57,18 @@ Built for the [Arbitrum Vibekit](https://github.com/EmberAGI/arbitrum-vibekit) e
 | `pact_build_open_channel` | Open payment channel (multi-step: approve + open) |
 | `pact_build_fund_channel` | Fund your side of channel (multi-step: approve + fund) |
 
-## Quickstart
+## Connect to Your Agent
+
+**Environment variables (optional):**
 
 ```bash
-git clone https://github.com/praxisagent/pact-vibekit-plugin.git
-cd pact-vibekit-plugin
-npm install
-npm run build
-npm start
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc  # Defaults to public RPC
+PORT=3012                                       # Defaults to 3012
 ```
-
-### Environment Variables
-
-```bash
-ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc  # Optional, defaults to public
-PORT=3012                                       # Optional, defaults to 3012
-```
-
-### Connect to Your Agent
 
 **HTTP endpoint:** `http://localhost:3012/mcp`
 
-Add to MCP client config (e.g., Vibekit `mcp.json`):
+MCP client config (e.g., Vibekit `mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -72,8 +84,8 @@ STDIO (Claude Desktop `claude_desktop_config.json`):
 {
   "mcpServers": {
     "pact": {
-      "command": "node",
-      "args": ["./dist/index.js"]
+      "command": "npx",
+      "args": ["pact-mcp-server"]
     }
   }
 }
@@ -81,7 +93,8 @@ STDIO (Claude Desktop `claude_desktop_config.json`):
 
 ## Transaction Plan Format
 
-Builder tools return a JSON plan:
+Write tools return unsigned transaction calldata — the calling agent signs and broadcasts. No private keys ever touch the MCP server.
+
 ```json
 {
   "chainId": 42161,
@@ -106,25 +119,10 @@ When `steps` is present, submit each step sequentially.
 | PactEscrow v2 | `0x220B97972d6028Acd70221890771E275e7734BFB` |
 | PactPaymentChannel | `0x5a9D124c05B425CD90613326577E03B3eBd1F891` |
 
-## Architecture
-
-```
-pact-mcp-server/
-├── src/
-│   ├── index.ts       # Server entry — StreamableHTTP + STDIO transports
-│   ├── mcp.ts         # MCP tool definitions (13 tools)
-│   └── contracts.ts   # Contract addresses, ABIs, status labels
-├── package.json
-├── tsconfig.json
-└── .env.example
-```
-
-The server is **read-heavy by default**: all write operations return unsigned transaction calldata. The calling agent signs and broadcasts. No private keys ever touch the MCP server.
-
 ## Security
 
 - **No private keys.** Write tools return unsigned transactions. The agent's wallet handles signing.
-- **No max approvals.** Approve tools take exact amounts. Unlimited approvals are a drain vector.
+- **No max approvals.** Approve tools take exact amounts.
 - **Read-only RPC.** The server only reads chain state. No transactions are sent server-side.
 - **Validated inputs.** All parameters are Zod-validated before processing.
 
@@ -139,6 +137,7 @@ MIT
 ## Links
 
 - [PACT Protocol](https://dopeasset.com)
+- [npm package](https://www.npmjs.com/package/pact-mcp-server)
+- [GitHub](https://github.com/praxisagent/pact-vibekit-plugin)
 - [Grants Program](https://dopeasset.com/grants)
-- [Vibekit Contribution Issue #569](https://github.com/EmberAGI/arbitrum-vibekit/issues/569)
-- [Arbitrum Vibekit](https://github.com/EmberAGI/arbitrum-vibekit)
+- [Vibekit PR #572](https://github.com/EmberAGI/arbitrum-vibekit/pull/572)
