@@ -1,92 +1,119 @@
 #!/usr/bin/env node
 
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import dotenv from 'dotenv';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { randomUUID } from 'node:crypto';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+
 import { createServer } from './mcp.js';
 
 dotenv.config();
 
 async function main() {
-  const rpcUrl = process.env['RPC_URL'] ?? 'https://arb1.arbitrum.io/rpc';
-
-  const server = createServer(rpcUrl);
-
-  // ── HTTP / SSE transport ────────────────────────────────────
   const app = express();
-
-  app.use((req: Request, _res: Response, next: NextFunction) => {
-    console.error(`${req.method} ${req.url}`);
+  app.use(express.json());
+  app.use(function (req: Request, _res: Response, next: NextFunction) {
+    console.log(`${req.method} ${req.url}`);
     next();
   });
 
-  const transports: Record<string, SSEServerTransport> = {};
+  const server = await createServer();
+  const transports: Record<string, StreamableHTTPServerTransport> = {};
 
-  app.get('/sse', async (_req: Request, res: Response) => {
-    const transport = new SSEServerTransport('/messages', res);
-    const sessionId = (transport as unknown as Record<string, unknown>)['sessionId'];
-    if (typeof sessionId !== 'string') {
-      throw new TypeError('SSE transport did not expose a string sessionId');
+  const mcpPostHandler = async (req: Request, res: Response) => {
+    const sessionId = req.headers['mcp-session-id'] as string;
+
+    try {
+      let transport: StreamableHTTPServerTransport;
+
+      if (sessionId && transports[sessionId]) {
+        transport = transports[sessionId];
+      } else if (!sessionId && isInitializeRequest(req.body)) {
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (sid) => {
+            transports[sid] = transport;
+          },
+        });
+        transport.onclose = () => {
+          const sid = transport.sessionId;
+          if (sid && transports[sid]) {
+            delete transports[sid];
+          }
+        };
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+        return;
+      } else {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Bad Request: No valid session ID' },
+          id: null,
+        });
+        return;
+      }
+
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      console.error('Error handling MCP request:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error' },
+          id: null,
+        });
+      }
     }
-    transports[sessionId] = transport;
-    await server.connect(transport);
-  });
+  };
 
-  app.post('/messages', async (req: Request, res: Response) => {
-    const sessionIdParam = req.query['sessionId'];
-    if (typeof sessionIdParam !== 'string') {
-      res.status(400).send('sessionId query parameter is required');
+  app.post('/mcp', mcpPostHandler);
+
+  app.get('/mcp', async (req: Request, res: Response) => {
+    const sessionId = req.headers['mcp-session-id'] as string;
+    if (!sessionId || !transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
       return;
     }
-    const transport = transports[sessionIdParam];
-    if (!transport) {
-      res.status(400).send('No transport for sessionId');
+    await transports[sessionId].handleRequest(req, res);
+  });
+
+  app.delete('/mcp', async (req: Request, res: Response) => {
+    const sessionId = req.headers['mcp-session-id'] as string;
+    if (!sessionId || !transports[sessionId]) {
+      res.status(400).send('Invalid or missing session ID');
       return;
     }
-    await transport.handlePostMessage(req, res);
+    try {
+      await transports[sessionId].handleRequest(req, res);
+    } catch (err) {
+      console.error('Error handling session termination:', err);
+      if (!res.headersSent) res.status(500).send('Error processing session termination');
+    }
   });
 
-  app.get('/.well-known/agent.json', (_req: Request, res: Response) => {
-    res.json({
-      name: 'PACT MCP Server',
-      version: '1.0.0',
-      description: 'MCP server for PACT Protocol — trustless escrow and payment channels for AI agents on Arbitrum',
-      website: 'https://dopeasset.com',
-      skills: [
-        {
-          id: 'pact-escrow',
-          name: 'PACT Escrow',
-          description: 'Create, complete, verify, and reclaim trustless PACT escrow agreements',
-          tags: ['escrow', 'arbitrum', 'pact', 'agents'],
-          examples: ['pact_get_escrow', 'pact_build_create_escrow', 'pact_build_complete_escrow'],
-          inputModes: ['application/json'],
-          outputModes: ['application/json'],
-        },
-        {
-          id: 'pact-channels',
-          name: 'PACT Payment Channels',
-          description: 'Open and settle bidirectional PACT payment channels for agent micropayments',
-          tags: ['payment-channels', 'micropayments', 'arbitrum', 'pact'],
-          examples: ['pact_get_channel', 'pact_build_open_channel', 'pact_compute_payment_digest'],
-          inputModes: ['application/json'],
-          outputModes: ['application/json'],
-        },
-      ],
-    });
+  const PORT = process.env['PORT'] ?? '3012';
+  app.listen(Number(PORT), () => {
+    console.log(`PACT MCP Server running on port ${PORT}`);
+    console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
+    console.log(`Arbitrum RPC: ${process.env['ARBITRUM_RPC_URL'] ?? 'https://arb1.arbitrum.io/rpc'}`);
   });
 
-  const PORT = process.env['PORT'] ?? 3020;
-  app.listen(PORT, () => console.error(`PACT MCP server listening on port ${PORT}`));
-
-  // ── STDIO transport ─────────────────────────────────────────
+  // Also start stdio transport for Claude Desktop / local agent use
   const stdioTransport = new StdioServerTransport();
   await server.connect(stdioTransport);
-  process.stdin.on('end', () => process.exit(0));
+
+  process.stdin.on('end', () => {
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => process.exit(0));
+  process.on('SIGINT', () => process.exit(0));
 }
 
-main().catch(err => {
-  console.error('Fatal:', err);
-  process.exit(1);
+main().catch((err) => {
+  console.error('Server failed to start:', err);
+  process.exit(-1);
 });

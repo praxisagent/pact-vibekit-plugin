@@ -1,55 +1,209 @@
-// PACT Protocol contract addresses on Arbitrum One (chainId 42161)
-export const CONTRACTS = {
-  PACT_TOKEN:    '0x809c2540358E2cF37050cCE41A610cb6CE66Abe1',
-  PACT_ESCROW:   '0x220B97972d6028Acd70221890771E275e7734BFB',
-  PACT_CHANNEL:  '0x5a9D124c05B425CD90613326577E03B3eBd1F891',
+/**
+ * PACT Protocol contract addresses and ABIs (Arbitrum One)
+ */
+
+export const CHAIN_ID = 42161; // Arbitrum One
+
+export const ADDRESSES = {
+  pactToken: '0x809c2540358E2cF37050cCE41A610cb6CE66Abe1' as const,
+  pactEscrowV2: '0x220B97972d6028Acd70221890771E275e7734BFB' as const,
+  pactPaymentChannel: '0x5a9D124c05B425CD90613326577E03B3eBd1F891' as const,
 } as const;
 
-// Minimal ABI fragments for PactEscrow v2
-export const ESCROW_ABI = [
-  'function nextPactId() view returns (uint256)',
-  'function pacts(uint256) view returns (address creator, address recipient, address verifier, uint256 amount, uint256 deadline, uint8 status)',
-  'function create(address recipient, address verifier, uint256 amount, uint256 deadline) returns (uint256)',
-  'function complete(uint256 pactId)',
-  'function verify(uint256 pactId)',
-  'function reclaim(uint256 pactId)',
-] as const;
-
-// Minimal ABI fragments for PactPaymentChannel
-export const CHANNEL_ABI = [
-  'function nextChannelId() view returns (uint256)',
-  'function CHALLENGE_PERIOD() view returns (uint256)',
-  'function DOMAIN_SEPARATOR() view returns (bytes32)',
-  'function UPDATE_TYPEHASH() view returns (bytes32)',
-  'function channels(uint256) view returns (address agentA, address agentB, uint256 depositA, uint256 depositB, uint256 totalDeposit, uint256 nonce, uint256 balanceA, uint256 balanceB, uint256 closeTime, uint8 state)',
-  'function isSettleable(uint256 channelId) view returns (bool)',
-  'function open(address agentB, uint256 depositA) returns (uint256)',
-  'function fund(uint256 channelId, uint256 depositB)',
-  'function coopClose(uint256 channelId, uint256 balanceA, uint256 balanceB, uint256 nonce, bytes sigA, bytes sigB)',
-  'function initiateClose(uint256 channelId, uint256 balanceA, uint256 balanceB, uint256 nonce, bytes sigA, bytes sigB)',
-  'function challenge(uint256 channelId, uint256 balanceA, uint256 balanceB, uint256 nonce, bytes sigA, bytes sigB)',
-  'function settle(uint256 channelId)',
-] as const;
-
-// Minimal ABI fragments for ERC-20 (PACT token)
 export const ERC20_ABI = [
-  'function balanceOf(address account) view returns (uint256)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function decimals() view returns (uint8)',
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
 ] as const;
 
-// Status labels for Pact
-export const PACT_STATUS: Record<number, string> = {
-  0: 'Active',
-  1: 'PendingVerification',
-  2: 'Completed',
-  3: 'Reclaimed',
-};
+export const ESCROW_V2_ABI = [
+  {
+    name: 'getPact',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'pactId', type: 'uint256' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'creator', type: 'address' },
+          { name: 'recipient', type: 'address' },
+          { name: 'arbitrator', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+          { name: 'arbitratorFee', type: 'uint256' },
+          { name: 'deadline', type: 'uint256' },
+          { name: 'disputeWindow', type: 'uint256' },
+          { name: 'arbitrationWindow', type: 'uint256' },
+          { name: 'workSubmittedAt', type: 'uint256' },
+          { name: 'disputeRaisedAt', type: 'uint256' },
+          { name: 'workHash', type: 'bytes32' },
+          { name: 'status', type: 'uint8' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'isReleaseable',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'pactId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'nextPactId',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'create',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'recipient', type: 'address' },
+      { name: 'arbitrator', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'arbitratorFee', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'disputeWindow', type: 'uint256' },
+      { name: 'arbitrationWindow', type: 'uint256' },
+    ],
+    outputs: [{ name: 'pactId', type: 'uint256' }],
+  },
+  {
+    name: 'submitWork',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'pactId', type: 'uint256' },
+      { name: 'workHash', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'pactId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'dispute',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'pactId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'release',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'pactId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'reclaim',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'pactId', type: 'uint256' }],
+    outputs: [],
+  },
+] as const;
 
-// State labels for Channel
-export const CHANNEL_STATE: Record<number, string> = {
-  0: 'Open',
-  1: 'Closing',
-  2: 'Closed',
-};
+export const CHANNEL_ABI = [
+  {
+    name: 'getChannel',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'channelId', type: 'uint256' }],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'agentA', type: 'address' },
+          { name: 'agentB', type: 'address' },
+          { name: 'depositA', type: 'uint256' },
+          { name: 'depositB', type: 'uint256' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'balanceA', type: 'uint256' },
+          { name: 'balanceB', type: 'uint256' },
+          { name: 'closeTime', type: 'uint256' },
+          { name: 'state', type: 'uint8' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'isSettleable',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'channelId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    name: 'nextChannelId',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    name: 'open',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'agentB', type: 'address' },
+      { name: 'depositA', type: 'uint256' },
+    ],
+    outputs: [{ name: 'channelId', type: 'uint256' }],
+  },
+  {
+    name: 'fund',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'channelId', type: 'uint256' },
+      { name: 'depositB', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'settle',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'channelId', type: 'uint256' }],
+    outputs: [],
+  },
+] as const;
+
+// Status names for human-readable output
+export const ESCROW_STATUS = ['Active', 'WorkSubmitted', 'Disputed', 'Complete', 'Refunded'] as const;
+export const CHANNEL_STATE = ['Open', 'Closing', 'Closed'] as const;
+
+// PACT has 18 decimals
+export const PACT_DECIMALS = 18n;
